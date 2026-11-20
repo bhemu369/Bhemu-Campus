@@ -1,6 +1,6 @@
 export const MOBILE_RELEASE = {
 	version: "2.0.2",
-	apkUrl: "https://github.com/adarsh3699/Bhemu-Campus/releases/download/mobile-v2.0.2/bcampus-mobile-v2.0.2.apk",
+	apkUrl: "https://github.com/bhemu369/Bhemu-Campus/releases/download/mobile-v2.0.2/bcampus-mobile-v2.0.2.apk",
 	websiteUrl: "https://campus.bhemu.in/",
 	releaseNotes: [
 		"Restored reliable chat notifications for announcements, pinned messages, replies, and batchmate messages.",

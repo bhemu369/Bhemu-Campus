@@ -18,7 +18,10 @@
 		"userInterfaceStyle": "automatic",
 		"ios": {
 			"supportsTablet": true,
-			"bundleIdentifier": "in.bhemu.campus"
+			"bundleIdentifier": "in.bhemu.campus",
+			"infoPlist": {
+				"ITSAppUsesNonExemptEncryption": false
+			}
 		},
 		"android": {
 			"versionCode": 1,
