@@ -19,6 +19,7 @@
 		"ios": {
 			"supportsTablet": true,
 			"bundleIdentifier": "in.bhemu.campus",
+			"googleServicesFile": "./GoogleService-Info.plist",
 			"infoPlist": {
 				"ITSAppUsesNonExemptEncryption": false
 			}
@@ -48,6 +49,14 @@
 					"image": "./assets/splash-screen.png",
 					"resizeMode": "contain",
 					"backgroundColor": "#0E0E0E"
+				}
+			],
+			[
+				"expo-build-properties",
+				{
+					"ios": {
+						"enableSceneSupport": true
+					}
 				}
 			],
 			"@react-native-google-signin/google-signin"

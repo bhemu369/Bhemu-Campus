@@ -35,6 +35,15 @@ export function isUsableUMSSyncResult(value: unknown): value is UMSSyncResult {
 	return hasStudentIdentity && hasAcademicRecords;
 }
 
+function withSyncStage(stage: string, error: unknown): Error {
+	const message = error instanceof Error ? error.message : String(error);
+	const wrapped = new Error(`${stage}: ${message}`);
+	if (error && typeof error === "object" && "code" in error) {
+		(wrapped as Error & { code?: unknown }).code = (error as { code?: unknown }).code;
+	}
+	return wrapped;
+}
+
 // Called after the WebView has fetched all UMS data and sent it via postMessage.
 // No cookie handling needed here — fetching happened inside the WebView.
 export async function writeToFirestore(
@@ -48,7 +57,11 @@ export async function writeToFirestore(
 	}
 
 	await Promise.all([
-		syncGradesAndMarks(db, uid, data, String(profileId)),
-		syncAttendanceOnly(db, uid, { attendance: data.attendance }, String(profileId)),
+		syncGradesAndMarks(db, uid, data, String(profileId)).catch((error) => {
+			throw withSyncStage("Grades and marks", error);
+		}),
+		syncAttendanceOnly(db, uid, { attendance: data.attendance }, String(profileId)).catch((error) => {
+			throw withSyncStage("Attendance", error);
+		}),
 	]);
 }

@@ -20,6 +20,20 @@ const LazyUMSWebView = lazy(() => import("@/features/sync/UMSWebView"));
 
 type SyncState = "idle" | "syncing" | "login_needed" | "success" | "error";
 
+function syncErrorMessage(error: unknown, fallback = "Sync failed. Please try again.") {
+	if (error && typeof error === "object") {
+		const candidate = error as { code?: unknown; message?: unknown };
+		if (typeof candidate.code === "string") {
+			if (candidate.code === "permission-denied") return "Sync permission was denied.";
+			if (candidate.code === "unavailable" || candidate.code === "failed-precondition") {
+				return "Sync service is temporarily unavailable.";
+			}
+		}
+		if (typeof candidate.message === "string" && candidate.message.trim()) return candidate.message;
+	}
+	return typeof error === "string" && error.trim() ? error : fallback;
+}
+
 async function rescheduleNotifications(
 	activeProfileId: string | number | null,
 	profiles: Array<{ id: string | number; name?: string }>,
@@ -125,6 +139,7 @@ export default function TabsLayout() {
 	const pendingUmsDataRef = useRef<UMSLocalData | null>(null);
 
 	const [syncState, setSyncState] = useState<SyncState>("idle");
+	const [syncError, setSyncError] = useState<string | null>(null);
 	const [engineActive, setEngineActive] = useState(false);
 	const [loginVisible, setLoginVisible] = useState(false);
 	const previousNotificationScopeRef = useRef<string | null>(null);
@@ -215,6 +230,7 @@ export default function TabsLayout() {
 
 	const startSync = useCallback(() => {
 		pendingUmsDataRef.current = null;
+		setSyncError(null);
 		setSyncState("syncing");
 		setLoginVisible(false);
 		setEngineActive(true);
@@ -246,8 +262,11 @@ export default function TabsLayout() {
 				setEngineActive(false);
 				setLoginVisible(false);
 				setTimeout(() => setSyncState("idle"), 3000);
-			} catch {
+			} catch (error) {
+				const message = syncErrorMessage(error, "Could not save synced data.");
+				console.error("[UMS] Firestore sync failed:", error);
 				pendingUmsDataRef.current = null;
+				setSyncError(message);
 				setSyncState("error");
 				setEngineActive(false);
 				setLoginVisible(false);
@@ -273,6 +292,7 @@ export default function TabsLayout() {
 
 	const handleClose = useCallback(() => {
 		pendingUmsDataRef.current = null;
+		setSyncError(null);
 		setLoginVisible(false);
 		setEngineActive(false);
 		setSyncState("idle");
@@ -282,12 +302,16 @@ export default function TabsLayout() {
 		pendingUmsDataRef.current = data;
 	}, []);
 
-	const handleError = useCallback(() => {
+	const handleError = useCallback((message?: string) => {
+		const errorMessage = syncErrorMessage(message);
+		console.error("[UMS] WebView sync failed:", message);
 		pendingUmsDataRef.current = null;
+		setSyncError(errorMessage);
 		setSyncState("error");
 		setLoginVisible(false);
 		setEngineActive(false);
 	}, []);
+	const syncErrorLabel = syncError ? `Sync failed: ${syncError}` : "Sync failed — tap to retry";
 
 	return (
 		<View style={local.container}>
@@ -346,7 +370,7 @@ export default function TabsLayout() {
 									{syncState === "success" ? (
 										<AnimatedTooltip message="Sync Successful!" color={Colors.success} />
 									) : syncState === "error" ? (
-										<AnimatedTooltip message="Sync Failed!" color={Colors.destructive} />
+										<AnimatedTooltip message={syncErrorLabel} color={Colors.destructive} />
 									) : syncState === "idle" && !hasSynced && !umsLoading && !isSharedProfile ? (
 										<AnimatedTooltip message="Sync with UMS" color={Colors.primary} />
 									) : null}

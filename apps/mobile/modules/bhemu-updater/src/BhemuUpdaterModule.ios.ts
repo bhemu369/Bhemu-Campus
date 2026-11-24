@@ -12,12 +12,15 @@ const BhemuUpdaterModule = {
 		_eventName: "onDownloadComplete",
 		_listener: (event: DownloadCompleteEvent) => void
 	) {
+		void _eventName;
+		void _listener;
 		return { remove: () => {} };
 	},
 	async canInstallPackages(): Promise<boolean> {
 		return false;
 	},
 	async getDownloadStatus(_downloadId: number): Promise<null> {
+		void _downloadId;
 		return null;
 	},
 	async downloadApk(
@@ -27,6 +30,11 @@ const BhemuUpdaterModule = {
 		_description: string,
 		_mimeType: string
 	): Promise<number> {
+		void _url;
+		void _filename;
+		void _title;
+		void _description;
+		void _mimeType;
 		throw new Error("APK updates are only available on Android.");
 	},
 };

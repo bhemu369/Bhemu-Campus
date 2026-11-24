@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { Platform } from "react-native";
 import {
 	createUserWithEmailAndPassword,
 	signInWithEmailAndPassword,
@@ -82,11 +83,21 @@ async function readStoredLaunchUser(): Promise<LaunchUser | null> {
 
 type GoogleSigninClient = (typeof import("@react-native-google-signin/google-signin"))["GoogleSignin"];
 let googleSigninClient: GoogleSigninClient | null = null;
+const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID?.trim();
+const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim();
 
 async function getGoogleSignin() {
 	if (googleSigninClient) return googleSigninClient;
+	if (Platform.OS === "ios" && !googleIosClientId) {
+		throw new Error(
+			"Google Sign-In is not configured for iOS. Add EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID or GoogleService-Info.plist."
+		);
+	}
 	const { GoogleSignin } = await import("@react-native-google-signin/google-signin");
-	GoogleSignin.configure({ webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID });
+	GoogleSignin.configure({
+		webClientId: googleWebClientId,
+		...(Platform.OS === "ios" && googleIosClientId ? { iosClientId: googleIosClientId } : {}),
+	});
 	googleSigninClient = GoogleSignin;
 	return GoogleSignin;
 }

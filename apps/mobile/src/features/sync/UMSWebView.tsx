@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from "react-native";
 import { WebView, type WebViewNavigation } from "react-native-webview";
 import { X, RefreshCw } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -9,6 +9,7 @@ import type { UMSLocalData } from "@bhemu/shared";
 import { WEBVIEW_SYNC_SCRIPT } from "./webviewSyncScript";
 
 const DASHBOARD_URL = "https://ums.lpu.in/lpuums/StudentDashboard.aspx";
+const UMS_ORIGIN_WHITELIST = ["https://*", "http://*", "about:*"];
 
 const FORM_CAPTURE_JS = `(function(){
   function capture(form,submitter){
@@ -63,32 +64,35 @@ const FORM_CAPTURE_JS = `(function(){
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',observePageState);
   else observePageState();
-  var origSubmit=HTMLFormElement.prototype.submit;
-  var bypassing=false;
-  HTMLFormElement.prototype.submit=function(){
-    if(bypassing){return origSubmit.call(this);}
-    capture(this,null);
-    var f=this;
-    setTimeout(function(){bypassing=true;origSubmit.call(f);bypassing=false;},120);
-  };
-  var lastClicked=null;
-  document.addEventListener('click',function(e){
-    var t=e.target;
-    while(t&&t!==document){
-      if(t.tagName==='INPUT'&&(t.type==='submit'||t.type==='image')){lastClicked=t;return;}
-      if(t.tagName==='BUTTON'&&t.type!=='button'){lastClicked=t;return;}
-      t=t.parentElement;
-    }
-  },true);
-  document.addEventListener('submit',function(e){
-    if(e.target&&e.target.tagName==='FORM'&&!bypassing){
-      var btn=e.submitter||lastClicked;
-      capture(e.target,btn);
-      e.preventDefault();
-      var f=e.target;
+  var enableFormCapture=${Platform.OS === "android" ? "true" : "false"};
+  if(enableFormCapture){
+    var origSubmit=HTMLFormElement.prototype.submit;
+    var bypassing=false;
+    HTMLFormElement.prototype.submit=function(){
+      if(bypassing){return origSubmit.call(this);}
+      capture(this,null);
+      var f=this;
       setTimeout(function(){bypassing=true;origSubmit.call(f);bypassing=false;},120);
-    }
-  },true);
+    };
+    var lastClicked=null;
+    document.addEventListener('click',function(e){
+      var t=e.target;
+      while(t&&t!==document){
+        if(t.tagName==='INPUT'&&(t.type==='submit'||t.type==='image')){lastClicked=t;return;}
+        if(t.tagName==='BUTTON'&&t.type!=='button'){lastClicked=t;return;}
+        t=t.parentElement;
+      }
+    },true);
+    document.addEventListener('submit',function(e){
+      if(e.target&&e.target.tagName==='FORM'&&!bypassing){
+        var btn=e.submitter||lastClicked;
+        capture(e.target,btn);
+        e.preventDefault();
+        var f=e.target;
+        setTimeout(function(){bypassing=true;origSubmit.call(f);bypassing=false;},120);
+      }
+    },true);
+  }
 })();true;`;
 
 interface Props {
@@ -261,10 +265,12 @@ const UMSWebView = ({
 					}
 				}}
 				style={local.webview}
+				originWhitelist={UMS_ORIGIN_WHITELIST}
 				javaScriptEnabled
 				domStorageEnabled
 				sharedCookiesEnabled
 				thirdPartyCookiesEnabled
+				allowsInlineMediaPlayback
 				mixedContentMode="always"
 				injectedJavaScriptBeforeContentLoaded={FORM_CAPTURE_JS}
 				pullToRefreshEnabled={true}

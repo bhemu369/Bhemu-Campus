@@ -51,11 +51,31 @@ export const WEBVIEW_SYNC_SCRIPT = `
     return error;
   }
 
+  function createSessionExpiredError() {
+    var error = new Error('UMS session expired.');
+    error.code = 'SESSION_EXPIRED';
+    return error;
+  }
+
+  function requestName(url) {
+    try {
+      return new URL(url).pathname.split('/').pop() || 'UMS request';
+    } catch (error) {
+      return 'UMS request';
+    }
+  }
+
   async function fetchText(url, options) {
-    var response = await fetch(url, options);
+    var response;
+    try {
+      response = await fetch(url, options);
+    } catch (error) {
+      throw new Error(requestName(url) + ' could not be reached. Check your internet connection.');
+    }
     var text = await response.text();
     if (isCloudflareChallenge(text)) throw createChallengeError();
-    if (!response.ok) throw new Error('UMS request failed with HTTP ' + response.status + '.');
+    if (isSessionExpired(text)) throw createSessionExpiredError();
+    if (!response.ok) throw new Error(requestName(url) + ' failed with HTTP ' + response.status + '.');
     return text;
   }
 
@@ -72,9 +92,19 @@ export const WEBVIEW_SYNC_SCRIPT = `
     try {
       return await fetchJson(url, options);
     } catch (error) {
-      if (error && error.code === 'CLOUDFLARE_CHALLENGE') throw error;
+      // Messages, announcements, seating and timetable are supplemental data.
+      // A challenge or a temporary failure for one of these endpoints must not
+      // discard a successful grades/attendance sync.
       return null;
     }
+  }
+
+  function unwrapJsonData(value) {
+    var raw = value && value.d !== undefined ? value.d : value;
+    if (typeof raw === 'string') {
+      try { return JSON.parse(raw); } catch (error) { return raw; }
+    }
+    return raw;
   }
 
   function parseCourseGrades(doc) {
@@ -273,13 +303,15 @@ export const WEBVIEW_SYNC_SCRIPT = `
 
       // Parse student info
       var si=null;
-      if(siRaw&&siRaw.d){ var arr=Array.isArray(siRaw.d)?siRaw.d:null; var info=arr?arr[0]:null;
+      var siData = unwrapJsonData(siRaw);
+      if(siData){ var arr=Array.isArray(siData)?siData:null; var info=arr?arr[0]:siData;
         if(info) si={vid:info.Registrationnumber||info.StudentUid||null,name:info.StudentName||null,program:info.Program||null,batchYear:info.BatchYear||null,cgpa:info.CGPA||null};
       }
 
       // Parse attendance
       var attendance=[];
-      if(attRaw&&typeof attRaw.d==='string'&&attRaw.d.trim()) attendance=parseAttendance(attRaw.d);
+      var attendanceHtml = unwrapJsonData(attRaw);
+      if(typeof attendanceHtml==='string'&&attendanceHtml.trim()) attendance=parseAttendance(attendanceHtml);
 
       if(!si || (allCourses.length===0 && allAssessments.length===0 && attendance.length===0 && terms.length===0)) {
         throw new Error('UMS returned incomplete data. Existing data was kept.');
@@ -389,10 +421,7 @@ export const WEBVIEW_SYNC_SCRIPT = `
             });
           }
         }
-      } catch(ttErr) {
-        if(ttErr && ttErr.code==='CLOUDFLARE_CHALLENGE') throw ttErr;
-        /* timetable is optional */
-      }
+      } catch(ttErr) { /* timetable is optional */ }
 
       // Post umsLocalData BEFORE syncData — syncData unmounts the WebView
       post('umsLocalData', { messages: messages, announcements: announcements, seatingPlan: seatingPlan, timetable: timetable });
@@ -406,6 +435,7 @@ export const WEBVIEW_SYNC_SCRIPT = `
       });
     } catch(e) {
       if(e && e.code==='CLOUDFLARE_CHALLENGE') post('cloudflareChallenge', {source:'fetch'});
+      else if(e && e.code==='SESSION_EXPIRED') post('error', 'SESSION_EXPIRED');
       else post('error', e&&e.message ? e.message : String(e));
     }
   }

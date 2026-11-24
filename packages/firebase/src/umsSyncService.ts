@@ -5,7 +5,6 @@ import {
 	writeBatch,
 	collection,
 	getDocs,
-	updateDoc,
 	setDoc,
 	type Firestore,
 } from "firebase/firestore";
@@ -339,36 +338,27 @@ export async function syncAttendanceOnly(
 		"main"
 	);
 
-	// Write only attendance counters via dot-notation — threshold fields are
-	// intentionally omitted so user-set values are never overwritten
-	const dotUpdate: Record<string, unknown> = { updatedAt: serverTimestamp() };
+	// Write only attendance counters. Threshold fields are intentionally omitted
+	// so user-set values are never overwritten. Using setDoc with mergeFields
+	// also creates the document on first sync without relying on updateDoc's
+	// update-only semantics.
+	const subjects: Record<string, Record<string, unknown>> = {};
+	const mergeFields = ["updatedAt"];
 	for (const record of data.attendance) {
 		const id = `att_${record.courseCode}`;
-		dotUpdate[`subjects.${id}.id`] = id;
-		dotUpdate[`subjects.${id}.name`] = record.courseName;
-		dotUpdate[`subjects.${id}.totalClasses`] = record.totalLectures;
-		dotUpdate[`subjects.${id}.attended`] = record.attendedLectures;
+		subjects[id] = {
+			id,
+			name: record.courseName,
+			totalClasses: record.totalLectures,
+			attended: record.attendedLectures,
+		};
+		mergeFields.push(
+			`subjects.${id}.id`,
+			`subjects.${id}.name`,
+			`subjects.${id}.totalClasses`,
+			`subjects.${id}.attended`
+		);
 	}
 
-	try {
-		await updateDoc(mainRef, dotUpdate);
-	} catch (e: unknown) {
-		if ((e as { code?: string })?.code === "not-found") {
-			// First sync — create doc with counters only; no threshold fields
-			// UI falls back to defaultThreshold until the user sets their own
-			const subjects: Record<string, unknown> = {};
-			for (const record of data.attendance) {
-				const id = `att_${record.courseCode}`;
-				subjects[id] = {
-					id,
-					name: record.courseName,
-					totalClasses: record.totalLectures,
-					attended: record.attendedLectures,
-				};
-			}
-			await setDoc(mainRef, { subjects, updatedAt: serverTimestamp() });
-		} else {
-			throw e;
-		}
-	}
+	await setDoc(mainRef, { subjects, updatedAt: serverTimestamp() }, { mergeFields });
 }
